@@ -6,3 +6,4 @@
 # dependencies / build output (Next.js scaffold will extend this)
 node_modules/
 .next/
+AI-GUYS-DEMO/

@@ -1,0 +1,28 @@
+{
+  "name": "Messy Data Summarizer",
+  "model": "claude-opus-5",
+  "input": {
+    "accept": [".csv", ".txt", ".md", ".json", ".log"],
+    "allowText": true,
+    "maxTotalKb": 150,
+    "mode": "combined"
+  },
+  "delivery": {
+    "defaultTarget": ""
+  },
+  "steps": [
+    {
+      "type": "llm",
+      "id": "summarize",
+      "prompt": "Analyze the input files and produce a structured summary. Identify key points, named entities, data quality issues, and concrete action items. Be specific and reference the data.",
+      "schema": {
+        "title": "string",
+        "key_points": "string[]",
+        "entities": "string[]",
+        "data_quality_issues": "string[]",
+        "action_items": "string[]"
+      }
+    },
+    { "type": "deliver", "target": "auto" }
+  ]
+}
