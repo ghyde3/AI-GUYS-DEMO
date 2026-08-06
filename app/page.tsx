@@ -3,14 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
+  ArrowLeft,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   CircleSlash,
   FileText,
+  History,
   Loader2,
   Mail,
+  Paperclip,
+  Plus,
   Sparkles,
-  UploadCloud,
   Webhook,
   X,
 } from "lucide-react";
@@ -34,6 +38,15 @@ type StepResult = {
   output?: unknown;
   error?: string;
 };
+
+type HistoryItem = {
+  ts: number;
+  steps: StepResult[];
+  inputs: { files: string[]; pasted: boolean; destination?: string };
+};
+
+const HISTORY_KEY = "mds-history-v1";
+const HISTORY_MAX = 20;
 
 function isPerFileOutput(o: unknown): o is { file: string; summary: unknown }[] {
   return (
@@ -117,6 +130,45 @@ function SummaryCard({
   );
 }
 
+function DeliverLine({ step }: { step: StepResult }) {
+  return (
+    <p
+      className={`animate-fade-in flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
+        step.status === "ok"
+          ? "border-emerald-900 bg-emerald-950/40 text-emerald-300"
+          : step.status === "skipped"
+            ? "border-slate-800 bg-slate-900/60 text-slate-400"
+            : "border-red-900 bg-red-950/40 text-red-300"
+      }`}
+    >
+      {step.status === "ok" && (
+        <>
+          {(step.output as { method: string }).method === "email" ? (
+            <Mail className="h-4 w-4 shrink-0" aria-hidden />
+          ) : (
+            <Webhook className="h-4 w-4 shrink-0" aria-hidden />
+          )}
+          Delivered via {(step.output as { method: string }).method} →{" "}
+          {(step.output as { target: string }).target}
+          <CheckCircle2 className="ml-auto h-4 w-4 shrink-0" aria-hidden />
+        </>
+      )}
+      {step.status === "skipped" && (
+        <>
+          <CircleSlash className="h-4 w-4 shrink-0" aria-hidden />
+          Delivery skipped — no destination provided.
+        </>
+      )}
+      {step.status === "error" && (
+        <>
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
+          Delivery failed: {step.error}
+        </>
+      )}
+    </p>
+  );
+}
+
 export default function Home() {
   const [config, setConfig] = useState<Config | null>(null);
   const [files, setFiles] = useState<Picked[]>([]);
@@ -125,7 +177,8 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<StepResult[] | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -133,7 +186,25 @@ export default function Home() {
       .then((r) => r.json())
       .then(setConfig)
       .catch(() => setError("Could not load pipeline config."));
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setHistory(parsed);
+      }
+    } catch {
+      /* corrupted or unavailable storage — start fresh */
+    }
   }, []);
+
+  function saveHistory(h: HistoryItem[]) {
+    setHistory(h);
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+    } catch {
+      /* storage full or blocked — history stays in memory */
+    }
+  }
 
   const accept = config?.input.accept ?? [];
   const maxKb = config?.input.maxTotalKb ?? 150;
@@ -162,7 +233,6 @@ export default function Home() {
     if (!config) return;
     setRunning(true);
     setError(null);
-    setResults(null);
     const payload: Picked[] = [...files];
     if (pasted.trim()) {
       payload.push({ name: "pasted-text.txt", content: pasted });
@@ -178,7 +248,18 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-      setResults(data.steps);
+      const item: HistoryItem = {
+        ts: Date.now(),
+        steps: data.steps,
+        inputs: {
+          files: files.map((f) => f.name),
+          pasted: pasted.trim().length > 0,
+          destination: destination || undefined,
+        },
+      };
+      const h = [...history, item].slice(-HISTORY_MAX);
+      saveHistory(h);
+      setViewIndex(h.length - 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -188,6 +269,8 @@ export default function Home() {
 
   const canRun =
     !running && !overCap && (files.length > 0 || pasted.trim().length > 0);
+
+  const viewing = viewIndex !== null ? history[viewIndex] : null;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12 space-y-8">
@@ -202,133 +285,185 @@ export default function Home() {
         </p>
       </header>
 
-      <section
-        className="animate-fade-up space-y-4"
-        style={{ animationDelay: "90ms" }}
-      >
-        <div
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            addFiles(e.dataTransfer.files);
-          }}
-          className={`group cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-all duration-200 ${
-            dragOver
-              ? "scale-[1.01] border-cyan-400 bg-cyan-950/30"
-              : "border-slate-700 hover:border-slate-500 hover:bg-slate-900/40"
-          }`}
+      {!viewing && (
+        <section
+          className="animate-fade-up space-y-3"
+          style={{ animationDelay: "90ms" }}
         >
-          <UploadCloud
-            className={`mx-auto mb-3 h-9 w-9 transition-all duration-200 ${
-              dragOver
-                ? "-translate-y-1 text-cyan-400"
-                : "text-slate-500 group-hover:-translate-y-1 group-hover:text-slate-300"
-            }`}
-            aria-hidden
-          />
-          <p className="font-medium">Click to upload or drag files here</p>
-          <p className="mt-1 text-sm text-slate-500">
-            {accept.join(", ")} · up to {maxKb}KB total
-          </p>
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            accept={accept.join(",")}
-            className="hidden"
-            onChange={(e) => {
-              addFiles(e.target.files);
-              e.target.value = "";
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
             }}
-          />
-        </div>
-
-        {files.length > 0 && (
-          <ul className="space-y-1.5">
-            {files.map((f, i) => (
-              <li
-                key={`${f.name}-${i}`}
-                className="animate-fade-in flex items-center justify-between rounded-lg bg-slate-900 px-3 py-2 text-sm transition-colors hover:bg-slate-800/80"
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              addFiles(e.dataTransfer.files);
+            }}
+            className={`rounded-xl border-2 border-dashed transition-all duration-200 ${
+              dragOver
+                ? "scale-[1.01] border-cyan-400 bg-cyan-950/30"
+                : "border-slate-700 bg-slate-900/40 focus-within:border-cyan-600"
+            }`}
+          >
+            <textarea
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+              placeholder="Paste messy text here — or drop files anywhere in this box"
+              rows={6}
+              className="w-full resize-none bg-transparent p-4 text-sm placeholder:text-slate-500 focus:outline-none"
+            />
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800 px-3 py-2">
+              <button
+                onClick={() => inputRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
               >
-                <span className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-cyan-500" aria-hidden />
-                  {f.name}{" "}
-                  <span className="text-slate-500">
-                    ({(f.content.length / 1024).toFixed(1)}KB)
+                <Paperclip className="h-4 w-4" aria-hidden />
+                Attach files
+              </button>
+              <span className="text-xs text-slate-600">
+                {accept.join(", ")} · up to {maxKb}KB
+              </span>
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                accept={accept.join(",")}
+                className="hidden"
+                onChange={(e) => {
+                  addFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <div className="ml-auto flex flex-wrap gap-1.5">
+                {files.map((f, i) => (
+                  <span
+                    key={`${f.name}-${i}`}
+                    className="animate-fade-in flex items-center gap-1 rounded-full bg-slate-800 py-0.5 pl-2.5 pr-1 text-xs text-slate-300"
+                  >
+                    <FileText className="h-3 w-3 text-cyan-500" aria-hidden />
+                    {f.name}
+                    <button
+                      onClick={() => setFiles(files.filter((_, j) => j !== i))}
+                      className="rounded-full p-0.5 text-slate-500 transition-colors hover:bg-red-950 hover:text-red-400"
+                      aria-label={`Remove ${f.name}`}
+                    >
+                      <X className="h-3 w-3" aria-hidden />
+                    </button>
                   </span>
-                </span>
-                <button
-                  onClick={() => setFiles(files.filter((_, j) => j !== i))}
-                  className="rounded p-1 text-slate-500 transition-colors hover:bg-red-950/50 hover:text-red-400"
-                  aria-label={`Remove ${f.name}`}
-                >
-                  <X className="h-4 w-4" aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                ))}
+              </div>
+            </div>
+          </div>
 
-        {config?.input.allowText && (
-          <textarea
-            value={pasted}
-            onChange={(e) => setPasted(e.target.value)}
-            placeholder="…or paste a long messy string here (meeting notes, email threads, logs)"
-            rows={5}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm placeholder:text-slate-600 transition-colors focus:border-cyan-500 focus:outline-none"
-          />
-        )}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              placeholder="Send to webhook or email (optional)"
+              className="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm placeholder:text-slate-600 transition-colors focus:border-cyan-500 focus:outline-none"
+            />
+            <button
+              onClick={run}
+              disabled={!canRun}
+              className="flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition-all duration-150 hover:bg-cyan-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-600"
+            >
+              {running ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Unmessing…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  Unmess It
+                </>
+              )}
+            </button>
+          </div>
 
-        <input
-          value={destination}
-          onChange={(e) => setDestination(e.target.value)}
-          placeholder="Webhook URL or email (optional)"
-          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm placeholder:text-slate-600 transition-colors focus:border-cyan-500 focus:outline-none"
-        />
-
-        {overCap && (
-          <p className="animate-fade-in flex items-center gap-1.5 text-sm text-amber-400">
-            <AlertCircle className="h-4 w-4" aria-hidden />
-            Input is {totalKb.toFixed(0)}KB — over the {maxKb}KB limit. Remove
-            something.
-          </p>
-        )}
-        {error && (
-          <p className="animate-fade-in flex items-center gap-1.5 text-sm text-red-400">
-            <AlertCircle className="h-4 w-4" aria-hidden />
-            {error}
-          </p>
-        )}
-
-        <button
-          onClick={run}
-          disabled={!canRun}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 py-3 font-semibold text-slate-950 transition-all duration-150 hover:bg-cyan-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-600"
-        >
-          {running ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Running pipeline…
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" aria-hidden />
-              Run Pipeline
-            </>
+          {overCap && (
+            <p className="animate-fade-in flex items-center gap-1.5 text-sm text-amber-400">
+              <AlertCircle className="h-4 w-4" aria-hidden />
+              Input is {totalKb.toFixed(0)}KB — over the {maxKb}KB limit.
+              Remove something.
+            </p>
           )}
-        </button>
-      </section>
+          {error && (
+            <p className="animate-fade-in flex items-center gap-1.5 text-sm text-red-400">
+              <AlertCircle className="h-4 w-4" aria-hidden />
+              {error}
+            </p>
+          )}
 
-      {results && (
+          {history.length > 0 && (
+            <button
+              onClick={() => setViewIndex(history.length - 1)}
+              className="flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-300"
+            >
+              <History className="h-4 w-4" aria-hidden />
+              View past results ({history.length})
+            </button>
+          )}
+        </section>
+      )}
+
+      {viewing && (
         <section className="animate-fade-up space-y-4">
-          <h2 className="text-xl font-semibold">Results</h2>
-          {results.map((step) => (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewIndex(null)}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-900 hover:text-slate-200"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              Back
+            </button>
+            <button
+              onClick={() => {
+                setFiles([]);
+                setPasted("");
+                setDestination("");
+                setError(null);
+                setViewIndex(null);
+              }}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-900 hover:text-slate-200"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              New
+            </button>
+            <div className="ml-auto flex items-center gap-1 text-sm text-slate-500">
+              <button
+                onClick={() => setViewIndex((i) => (i ?? 0) - 1)}
+                disabled={viewIndex === 0}
+                className="rounded-lg p-1.5 transition-colors hover:bg-slate-900 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Previous result"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+              </button>
+              <span className="tabular-nums">
+                {(viewIndex ?? 0) + 1} / {history.length}
+              </span>
+              <button
+                onClick={() => setViewIndex((i) => (i ?? 0) + 1)}
+                disabled={viewIndex === history.length - 1}
+                className="rounded-lg p-1.5 transition-colors hover:bg-slate-900 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label="Next result"
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500">
+            {new Date(viewing.ts).toLocaleString()} ·{" "}
+            {[
+              ...viewing.inputs.files,
+              ...(viewing.inputs.pasted ? ["pasted text"] : []),
+            ].join(", ") || "no input recorded"}
+          </p>
+
+          {viewing.steps.map((step) => (
             <div key={step.id} className="space-y-3">
               {step.type === "llm" && step.status === "ok" && (
                 <>
@@ -352,47 +487,10 @@ export default function Home() {
                   Step “{step.id}” failed: {step.error}
                 </p>
               )}
-              {step.type === "deliver" && (
-                <p
-                  className={`animate-fade-in flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
-                    step.status === "ok"
-                      ? "border-emerald-900 bg-emerald-950/40 text-emerald-300"
-                      : step.status === "skipped"
-                        ? "border-slate-800 bg-slate-900/60 text-slate-400"
-                        : "border-red-900 bg-red-950/40 text-red-300"
-                  }`}
-                >
-                  {step.status === "ok" && (
-                    <>
-                      {(step.output as { method: string }).method === "email" ? (
-                        <Mail className="h-4 w-4 shrink-0" aria-hidden />
-                      ) : (
-                        <Webhook className="h-4 w-4 shrink-0" aria-hidden />
-                      )}
-                      Delivered via {(step.output as { method: string }).method} →{" "}
-                      {(step.output as { target: string }).target}
-                      <CheckCircle2
-                        className="ml-auto h-4 w-4 shrink-0"
-                        aria-hidden
-                      />
-                    </>
-                  )}
-                  {step.status === "skipped" && (
-                    <>
-                      <CircleSlash className="h-4 w-4 shrink-0" aria-hidden />
-                      Delivery skipped — no destination provided.
-                    </>
-                  )}
-                  {step.status === "error" && (
-                    <>
-                      <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
-                      Delivery failed: {step.error}
-                    </>
-                  )}
-                </p>
-              )}
+              {step.type === "deliver" && <DeliverLine step={step} />}
             </div>
           ))}
+
           <details className="group text-sm">
             <summary className="flex cursor-pointer list-none items-center gap-1 text-slate-500 transition-colors hover:text-slate-300">
               <ChevronRight
@@ -402,7 +500,7 @@ export default function Home() {
               Raw JSON
             </summary>
             <pre className="animate-fade-in mt-2 overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-400">
-              {JSON.stringify(results, null, 2)}
+              {JSON.stringify(viewing.steps, null, 2)}
             </pre>
           </details>
         </section>
