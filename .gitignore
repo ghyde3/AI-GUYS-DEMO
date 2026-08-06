@@ -1,0 +1,8 @@
+# env files — never commit secrets
+.env
+.env.local
+.env*.local
+
+# dependencies / build output (Next.js scaffold will extend this)
+node_modules/
+.next/
