@@ -3,11 +3,24 @@ import { Resend } from "resend";
 
 export type InputFile = { name: string; content: string };
 
+type ScalarType =
+  | "string"
+  | "number"
+  | "integer"
+  | "boolean"
+  | "date"
+  | "date-time"
+  | "email"
+  | "uri";
+
+/** A config field type: any scalar, or the same with `[]` for a list. */
+export type FieldType = ScalarType | `${ScalarType}[]`;
+
 export type LlmStep = {
   type: "llm";
   id: string;
   prompt: string;
-  schema: Record<string, "string" | "string[]">;
+  schema: Record<string, FieldType>;
 };
 
 export type DeliverStep = { type: "deliver"; id?: string; target: string };
@@ -36,15 +49,32 @@ export type StepResult = {
 
 const anthropic = new Anthropic();
 
-// Expand the config's shorthand ("string" / "string[]") into a real JSON
-// schema for structured outputs.
+const SCALARS: Record<string, Record<string, unknown>> = {
+  string: { type: "string" },
+  number: { type: "number" },
+  integer: { type: "integer" },
+  boolean: { type: "boolean" },
+  date: { type: "string", format: "date" },
+  "date-time": { type: "string", format: "date-time" },
+  email: { type: "string", format: "email" },
+  uri: { type: "string", format: "uri" },
+};
+
+// Expand the config's shorthand ("number", "date[]", ...) into a real JSON
+// schema for structured outputs. A trailing [] makes it a list of that type.
 function toJsonSchema(shorthand: LlmStep["schema"]) {
   const properties: Record<string, unknown> = {};
   for (const [key, kind] of Object.entries(shorthand)) {
-    properties[key] =
-      kind === "string[]"
-        ? { type: "array", items: { type: "string" } }
-        : { type: "string" };
+    const isList = kind.endsWith("[]");
+    const scalar = SCALARS[isList ? kind.slice(0, -2) : kind];
+    if (!scalar) {
+      throw new Error(
+        `Unknown type "${kind}" for field "${key}". Supported: ${Object.keys(
+          SCALARS
+        ).join(", ")} — append [] for a list.`
+      );
+    }
+    properties[key] = isList ? { type: "array", items: scalar } : scalar;
   }
   return {
     type: "object",
