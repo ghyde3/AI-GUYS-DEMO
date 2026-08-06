@@ -175,6 +175,7 @@ export default function Home() {
   const [pasted, setPasted] = useState("");
   const [destination, setDestination] = useState("");
   const [running, setRunning] = useState(false);
+  const [destFocused, setDestFocused] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -361,13 +362,19 @@ export default function Home() {
             <input
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
+              onFocus={() => setDestFocused(true)}
+              onBlur={() => setDestFocused(false)}
               placeholder="Send to webhook or email (optional)"
-              className="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm placeholder:text-slate-600 transition-colors focus:border-cyan-500 focus:outline-none"
+              className={`min-w-0 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm placeholder:text-slate-600 transition-all duration-300 ease-out focus:border-cyan-500 focus:outline-none ${
+                destFocused ? "sm:basis-1/2" : "sm:basis-[30%]"
+              }`}
             />
             <button
               onClick={run}
               disabled={!canRun}
-              className="flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition-all duration-150 hover:bg-cyan-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-600"
+              className={`flex min-w-0 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition-all duration-300 ease-out hover:bg-cyan-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-cyan-200 ${
+                destFocused ? "sm:basis-1/2" : "sm:basis-[70%]"
+              }`}
             >
               {running ? (
                 <>
