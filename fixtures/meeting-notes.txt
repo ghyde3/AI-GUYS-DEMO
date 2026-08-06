@@ -1,0 +1,8 @@
+ok so quick brain dump from the tuesday sync before i forget -- sarah wants the
+onboarding flow redone before the pitch on the 21st, mike pushed back saying the
+API migration has to land first (he thinks 2 weeks?? seems optimistic). Legal
+flagged the data retention thing AGAIN, third time now, someone needs to own it,
+probably jen. oh and the acme contract renews aug 15 and nobody has looked at the
+new pricing terms. random: the staging server keeps falling over when QA runs the
+big import, dave suspects the connection pool. also we agreed (i think?) to move
+standup to 9:30. Karen from finance wants Q3 projections by EOW which is friday.
