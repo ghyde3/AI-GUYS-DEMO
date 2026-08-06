@@ -43,7 +43,8 @@ pipeline.config.json      — the centerpiece
   "input": {
     "accept": [".csv", ".txt", ".md", ".json", ".log"],
     "allowText": true,
-    "maxTotalKb": 150
+    "maxTotalKb": 150,
+    "mode": "combined"
   },
   "delivery": {
     "defaultTarget": ""
@@ -69,6 +70,7 @@ pipeline.config.json      — the centerpiece
 - `input.accept` — allowed file extensions. Drives the dropzone filter and hint text in the UI **and** server-side validation in `/api/run`. Config is the single source of truth.
 - `input.allowText` — when true, the UI renders a paste-text textarea alongside the dropzone. Pasted text becomes an input named `pasted-text.txt` in the same `files` array; the runner doesn't distinguish input sources.
 - `input.maxTotalKb` — combined payload cap, enforced client-side (friendly warning) and server-side (400).
+- `input.mode` — `"combined"` (default): all inputs go through the llm steps together, producing one summary. `"per_file"`: the runner loops the llm steps once per input, producing one structured summary per file (deliver steps send the whole collection). Answers the predictable client ask "I have 10 files — I want 10 summaries."
 - `steps` — ordered array, two step types:
   - `llm`: `{ prompt, schema, id }`. Calls Claude with the step prompt + accumulated input, using structured outputs built from `schema` (shorthand types `string` / `string[]` expanded to a proper JSON schema with `additionalProperties: false` and all fields required). Output becomes input to the next step. Steps are chainable (extract → summarize → …).
   - `deliver`: `{ target }`. `"auto"` = use the destination the user typed (contains `@` → Resend email; starts with `http` → webhook POST of the JSON payload), falling back to `delivery.defaultTarget`. No destination anywhere → step is skipped with status "skipped (no destination)".
@@ -89,7 +91,7 @@ Response:
     id: string;            // "summarize" or "deliver"
     type: "llm" | "deliver";
     status: "ok" | "error" | "skipped";
-    output?: unknown;      // llm: the structured JSON; deliver: { target, method }
+    output?: unknown;      // llm: the structured JSON (an array of {file, summary} in per_file mode); deliver: { target, method }
     error?: string;
   }[]
 }
@@ -105,7 +107,7 @@ Single page, clean and modern (this is a vibe check — visual polish matters):
 - Input card: drag-and-drop / click-to-upload zone (multiple files, extensions from config) + paste-text textarea (if `allowText`). Selected files listed with name/size and a remove button.
 - Destination input (optional), placeholder "webhook URL or email (optional)".
 - "Run Pipeline" button with loading state.
-- Results panel: rendered structured summary (title, bulleted key points, entities as chips, etc.) + collapsible raw JSON + delivery status line.
+- Results panel: rendered structured summary (title, bulleted key points, entities as chips, etc.) + collapsible raw JSON + delivery status line. In `per_file` mode, one summary card per input file.
 
 Files are read client-side with `FileReader`; no upload/blob storage.
 
@@ -117,6 +119,13 @@ Files are read client-side with `FileReader`; no upload/blob storage.
 ## Testing
 
 Manual QA only (explicit no-TDD decision for this project). Two fixture files in `fixtures/`: a messy CSV and a long text dump. Acceptance: upload fixtures → structured summary renders → webhook.site receives the JSON payload → email arrives via Resend. The Loom demo is the acceptance test.
+
+## Demo talking points — "can it also do X?"
+
+Philosophy: build the intent (an intake machine: messy input → structured, routable data), not just the ask. Prepared answers:
+
+- **Yes, via config (zero code):** extract sentiment / flag PII / output in another language (add a schema field or edit the prompt), a different analysis entirely (add an `llm` step), accept new file types (edit `input.accept`), one summary per file (`input.mode: "per_file"`).
+- **No, out of spec — and say so plainly:** OCR/PDFs/images, persistence/history, auth. Possible follow-ups, not in this build.
 
 ## Build order (~60 min)
 
