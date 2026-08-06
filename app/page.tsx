@@ -1,6 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  CircleSlash,
+  FileText,
+  Loader2,
+  Mail,
+  Sparkles,
+  UploadCloud,
+  Webhook,
+  X,
+} from "lucide-react";
 
 type Config = {
   name: string;
@@ -29,13 +42,25 @@ function isPerFileOutput(o: unknown): o is { file: string; summary: unknown }[] 
   );
 }
 
-function SummaryCard({ data, title }: { data: unknown; title?: string }) {
+function SummaryCard({
+  data,
+  title,
+  index = 0,
+}: {
+  data: unknown;
+  title?: string;
+  index?: number;
+}) {
   if (data === null || typeof data !== "object") return null;
   const entries = Object.entries(data as Record<string, unknown>);
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+    <div
+      className="animate-fade-up rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4"
+      style={{ animationDelay: `${index * 90}ms` }}
+    >
       {title && (
-        <p className="text-xs font-mono uppercase tracking-wider text-cyan-400">
+        <p className="flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-cyan-400">
+          <FileText className="h-3.5 w-3.5" aria-hidden />
           {title}
         </p>
       )}
@@ -70,7 +95,7 @@ function SummaryCard({ data, title }: { data: unknown; title?: string }) {
                   {value.map((v, i) => (
                     <span
                       key={i}
-                      className="rounded-full bg-cyan-950 border border-cyan-800 px-2.5 py-0.5 text-xs text-cyan-300"
+                      className="rounded-full bg-cyan-950 border border-cyan-800 px-2.5 py-0.5 text-xs text-cyan-300 transition-colors hover:border-cyan-500 hover:text-cyan-100"
                     >
                       {String(v)}
                     </span>
@@ -166,8 +191,9 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12 space-y-8">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">
+      <header className="animate-fade-up space-y-2">
+        <h1 className="flex items-center gap-2.5 text-3xl font-bold tracking-tight">
+          <Sparkles className="h-7 w-7 text-cyan-400" aria-hidden />
           {config?.name ?? "…"}
         </h1>
         <p className="text-slate-400">
@@ -176,7 +202,10 @@ export default function Home() {
         </p>
       </header>
 
-      <section className="space-y-4">
+      <section
+        className="animate-fade-up space-y-4"
+        style={{ animationDelay: "90ms" }}
+      >
         <div
           onClick={() => inputRef.current?.click()}
           onDragOver={(e) => {
@@ -189,12 +218,20 @@ export default function Home() {
             setDragOver(false);
             addFiles(e.dataTransfer.files);
           }}
-          className={`cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
+          className={`group cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-all duration-200 ${
             dragOver
-              ? "border-cyan-400 bg-cyan-950/30"
-              : "border-slate-700 hover:border-slate-500"
+              ? "scale-[1.01] border-cyan-400 bg-cyan-950/30"
+              : "border-slate-700 hover:border-slate-500 hover:bg-slate-900/40"
           }`}
         >
+          <UploadCloud
+            className={`mx-auto mb-3 h-9 w-9 transition-all duration-200 ${
+              dragOver
+                ? "-translate-y-1 text-cyan-400"
+                : "text-slate-500 group-hover:-translate-y-1 group-hover:text-slate-300"
+            }`}
+            aria-hidden
+          />
           <p className="font-medium">Click to upload or drag files here</p>
           <p className="mt-1 text-sm text-slate-500">
             {accept.join(", ")} · up to {maxKb}KB total
@@ -217,9 +254,10 @@ export default function Home() {
             {files.map((f, i) => (
               <li
                 key={`${f.name}-${i}`}
-                className="flex items-center justify-between rounded-lg bg-slate-900 px-3 py-2 text-sm"
+                className="animate-fade-in flex items-center justify-between rounded-lg bg-slate-900 px-3 py-2 text-sm transition-colors hover:bg-slate-800/80"
               >
-                <span>
+                <span className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-cyan-500" aria-hidden />
                   {f.name}{" "}
                   <span className="text-slate-500">
                     ({(f.content.length / 1024).toFixed(1)}KB)
@@ -227,10 +265,10 @@ export default function Home() {
                 </span>
                 <button
                   onClick={() => setFiles(files.filter((_, j) => j !== i))}
-                  className="text-slate-500 hover:text-red-400"
+                  className="rounded p-1 text-slate-500 transition-colors hover:bg-red-950/50 hover:text-red-400"
                   aria-label={`Remove ${f.name}`}
                 >
-                  ✕
+                  <X className="h-4 w-4" aria-hidden />
                 </button>
               </li>
             ))}
@@ -243,7 +281,7 @@ export default function Home() {
             onChange={(e) => setPasted(e.target.value)}
             placeholder="…or paste a long messy string here (meeting notes, email threads, logs)"
             rows={5}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none"
+            className="w-full rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm placeholder:text-slate-600 transition-colors focus:border-cyan-500 focus:outline-none"
           />
         )}
 
@@ -251,39 +289,56 @@ export default function Home() {
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
           placeholder="Webhook URL or email (optional)"
-          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none"
+          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm placeholder:text-slate-600 transition-colors focus:border-cyan-500 focus:outline-none"
         />
 
         {overCap && (
-          <p className="text-sm text-amber-400">
+          <p className="animate-fade-in flex items-center gap-1.5 text-sm text-amber-400">
+            <AlertCircle className="h-4 w-4" aria-hidden />
             Input is {totalKb.toFixed(0)}KB — over the {maxKb}KB limit. Remove
             something.
           </p>
         )}
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && (
+          <p className="animate-fade-in flex items-center gap-1.5 text-sm text-red-400">
+            <AlertCircle className="h-4 w-4" aria-hidden />
+            {error}
+          </p>
+        )}
 
         <button
           onClick={run}
           disabled={!canRun}
-          className="w-full rounded-xl bg-cyan-500 py-3 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-600"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 py-3 font-semibold text-slate-950 transition-all duration-150 hover:bg-cyan-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-600"
         >
-          {running ? "Running pipeline…" : "Run Pipeline"}
+          {running ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Running pipeline…
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" aria-hidden />
+              Run Pipeline
+            </>
+          )}
         </button>
       </section>
 
       {results && (
-        <section className="space-y-4">
+        <section className="animate-fade-up space-y-4">
           <h2 className="text-xl font-semibold">Results</h2>
           {results.map((step) => (
             <div key={step.id} className="space-y-3">
               {step.type === "llm" && step.status === "ok" && (
                 <>
                   {isPerFileOutput(step.output) ? (
-                    step.output.map((item) => (
+                    step.output.map((item, i) => (
                       <SummaryCard
                         key={item.file}
                         data={item.summary}
                         title={item.file}
+                        index={i}
                       />
                     ))
                   ) : (
@@ -292,13 +347,14 @@ export default function Home() {
                 </>
               )}
               {step.type === "llm" && step.status === "error" && (
-                <p className="rounded-lg border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+                <p className="animate-fade-in flex items-center gap-2 rounded-lg border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+                  <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
                   Step “{step.id}” failed: {step.error}
                 </p>
               )}
               {step.type === "deliver" && (
                 <p
-                  className={`rounded-lg border px-4 py-3 text-sm ${
+                  className={`animate-fade-in flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${
                     step.status === "ok"
                       ? "border-emerald-900 bg-emerald-950/40 text-emerald-300"
                       : step.status === "skipped"
@@ -306,20 +362,46 @@ export default function Home() {
                         : "border-red-900 bg-red-950/40 text-red-300"
                   }`}
                 >
-                  {step.status === "ok" &&
-                    `Delivered via ${(step.output as { method: string }).method} → ${(step.output as { target: string }).target}`}
-                  {step.status === "skipped" &&
-                    "Delivery skipped — no destination provided."}
-                  {step.status === "error" && `Delivery failed: ${step.error}`}
+                  {step.status === "ok" && (
+                    <>
+                      {(step.output as { method: string }).method === "email" ? (
+                        <Mail className="h-4 w-4 shrink-0" aria-hidden />
+                      ) : (
+                        <Webhook className="h-4 w-4 shrink-0" aria-hidden />
+                      )}
+                      Delivered via {(step.output as { method: string }).method} →{" "}
+                      {(step.output as { target: string }).target}
+                      <CheckCircle2
+                        className="ml-auto h-4 w-4 shrink-0"
+                        aria-hidden
+                      />
+                    </>
+                  )}
+                  {step.status === "skipped" && (
+                    <>
+                      <CircleSlash className="h-4 w-4 shrink-0" aria-hidden />
+                      Delivery skipped — no destination provided.
+                    </>
+                  )}
+                  {step.status === "error" && (
+                    <>
+                      <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
+                      Delivery failed: {step.error}
+                    </>
+                  )}
                 </p>
               )}
             </div>
           ))}
-          <details className="text-sm">
-            <summary className="cursor-pointer text-slate-500 hover:text-slate-300">
+          <details className="group text-sm">
+            <summary className="flex cursor-pointer list-none items-center gap-1 text-slate-500 transition-colors hover:text-slate-300">
+              <ChevronRight
+                className="h-4 w-4 transition-transform duration-200 group-open:rotate-90"
+                aria-hidden
+              />
               Raw JSON
             </summary>
-            <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-400">
+            <pre className="animate-fade-in mt-2 overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-400">
               {JSON.stringify(results, null, 2)}
             </pre>
           </details>
