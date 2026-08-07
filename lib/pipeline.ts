@@ -35,7 +35,7 @@ export type PipelineConfig = {
     maxTotalKb: number;
     mode?: "combined" | "per_file";
   };
-  delivery?: { defaultTarget?: string };
+  delivery?: { from?: string; defaultTarget?: string };
   steps: Step[];
 };
 
@@ -115,11 +115,12 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-async function deliver(target: string, payload: unknown, configName: string) {
+async function deliver(target: string, payload: unknown, config: PipelineConfig) {
+  const configName = config.name;
   if (target.includes("@")) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { error } = await resend.emails.send({
-      from: "Pipeline Demo <onboarding@resend.dev>",
+      from: config.delivery?.from ?? "Pipeline Demo <onboarding@resend.dev>",
       to: target,
       subject: `${configName} — results`,
       html: `<h2>${escapeHtml(configName)}</h2><pre style="background:#f4f4f5;padding:12px;border-radius:8px;font-size:13px">${escapeHtml(
@@ -189,7 +190,7 @@ export async function runPipeline(
         continue;
       }
       try {
-        const output = await deliver(target, payload, config.name);
+        const output = await deliver(target, payload, config);
         results.push({ id, type: "deliver", status: "ok", output });
       } catch (e) {
         results.push({ id, type: "deliver", status: "error", error: errMsg(e) });

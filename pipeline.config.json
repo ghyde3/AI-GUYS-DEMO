@@ -14,6 +14,7 @@
     "mode": "combined"
   },
   "delivery": {
+    "from": "Pipeline Demo <pipeline@getpathara.com>",
     "defaultTarget": "ghyde03@gmail.com"
   },
   "steps": [
